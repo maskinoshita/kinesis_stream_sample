@@ -1,0 +1,111 @@
+service: kds-sample
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+  # stage: dev
+  region: ap-northeast-1
+
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - kinesis:GetRecords 
+            - kinesis:GetShardIterator 
+            - kinesis:DescribeStream 
+            - kinesis:ListStreams 
+            - kinesis:PutRecord 
+            - kinesis:PutRecords
+          Resource: 
+            - !GetAtt WorkStream.Arn
+        - Effect: "Allow"
+          Action:
+            - "comprehend:*"
+          Resource:
+            - "*"
+
+  environment:
+    DATAFILE: "scsk_tweets.json"
+    WORKSTREAM_ARN: !GetAtt WorkStream.Arn
+    WORKSTREAM_NAME: ${self:custom.streamName}
+
+custom:
+  # 重要!!! 一意の名前をつけてください !!!
+  suffix: "mk"
+  webSiteName: kinesis-sample-tweet-pn-${self:custom.suffix}
+  webSiteOrigin:
+    Fn::Join:
+    - ""
+    - - "http://"
+      - ${self:custom.webSiteName}-${sls:stage}
+      - ".s3-website-"
+      - ${aws:region}
+      - ".amazonaws.com"
+  streamName: workstream
+
+package:
+  patterns:
+    - '!static/**' # 静的リソースはデプロイパッケージに含めない
+
+functions:
+  producer:
+    handler: producer.publish
+  subscriber:
+    handler: subscriber.subscribe
+    events:
+      - stream:
+          type: kinesis
+          arn: !GetAtt WorkStream.Arn
+          batchSize: 20
+          maximumRetryAttempts: 10
+          consumer: true
+
+#    Define function environment variables here
+#    environment:
+#      variable2: value2
+
+# you can add CloudFormation resource templates here
+resources:
+  Resources:
+    # Kinesis Stream
+    WorkStream:    
+      Type: AWS::Kinesis::Stream
+      Properties: 
+        Name: ${self:custom.streamName}
+        ShardCount: 20
+
+    # ウェブサイト用バケット
+    WebSiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.webSiteName}-${sls:stage}
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+          IndexDocument: index.html
+    
+    # 静的ウェブサイトホスティング用バケットポリシー
+    StaticSiteS3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebSiteBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action:
+                - s3:GetObject
+              Resource:
+                Fn::Join:
+                  - ""
+                  - - "arn:aws:s3:::"
+                    - !Ref WebSiteBucket
+                    - "/*"
+  Outputs:
+    StaticWebSiteUrl:
+      Description: "静的ウェブサイトホスティングのURL"
+      Value: ${self:custom.webSiteOrigin}
