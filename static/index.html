@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <title>Twiter PN</title>
+    <style type="text/css">
+        article {
+            margin: 0;
+            padding: 1em;
+            margin-bottom: 0.3em;
+        }
+        article p {
+            font-size: 12px;
+            margin: 0;
+        }
+        .Positive {
+            background-color: rgba(46,147,250,0.3)
+        }
+        .Negative {
+            background-color: rgba(233,30,99,0.3)
+        }
+        .Neutral {
+            background-color: rgba(84,110,122,0.3);
+        }
+        .Mixed {
+            background-color: rgba(102,218,38,0.3);
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>ツイートをネガポジ分析</h1>
+        <div class="grid">
+            <div>
+                <h4>集計</h4>
+                <div id="chart"></div>
+            </div> 
+            <div>
+                <h4>サンプルツイート</h4>
+                <div id="tweets">
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script type="text/javascript">
+        const WEBSOCKET_URL = 'wss://yeg50ku33k.execute-api.ap-northeast-1.amazonaws.com/dev';
+
+        const tweetsContainer = document.querySelector('#tweets');
+
+        let data = [0, 0, 0, 0];
+        const labels = ['Positive', 'Negative', 'Neutral', 'Mixed'];
+        const colors = ['#2E93fA', '#E91E63', '#546E7A', '#66DA26'];
+
+        const chart = initChart(data, labels, colors);
+        chart.render();
+
+        let socket = null;
+        openSocket();
+
+        function openSocket() {
+            socket = new WebSocket(WEBSOCKET_URL);
+
+            socket.addEventListener('open', (event) => {
+                console.log('Connected.');
+            });
+
+            socket.addEventListener('message', (event) => {
+                let response = JSON.parse(event.data);
+                labels.forEach((label, index) => {
+                    data[index] += response.filter((d) => d.sentiment === label).length;
+                });
+                chart.updateOptions({
+                    series: [{
+                        data: data
+                    }]
+                });
+                response.forEach((e) => {
+                    const c = document.createElement('article');
+                    c.className = e.sentiment;
+                    c.innerHTML = ["<p>", e.tweet, "</p>"].join("");
+                    tweetsContainer.prepend(c);
+                });
+            });
+
+            socket.addEventListener('close', (event) => {
+                console.log('Socket is closed. Try reconnect.');
+                setTimeout(function() {
+                    openSocket();
+                }, 1000);
+            });
+
+            socket.addEventListener('error', (event) => {
+                console.log('Error: ', err.message, 'Closing Socket.');
+                // disable reconnect
+                socket.addEventListener('close', (event) => {});
+                socket.close();
+            });
+        }
+
+        // gently close ws when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                // disable reconnect
+                socket.addEventListener('close', (event) => {});
+                socket.close();
+            }
+        });
+
+        function initChart(data, labels, colors) {
+            const options = {
+                chart: {
+                    type: 'bar',
+                    toolbar: {
+                        show: false
+                    },
+                },
+                series: [{
+                    data: data
+                }],
+                colors: colors,
+                plotOptions: {
+                    bar: {
+                        columnWidth: '45%',
+                        distributed: true,
+                        dataLabels: {
+                            position: 'top'
+                        }
+                    }
+                },
+                tooltip: {
+                    enabled: false
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        fontSize: '8px',
+                        fontWeight: 'bold',
+                        colors: ['#ccc']
+                    },
+                    offsetY: -16,
+                    formatter: function(val, opt) {
+                        const sum = data.reduce((s, e) => s + e, 0);
+                        return `${val} (${sum == 0 ? 0 : (val * 100.0 / sum).toFixed(1)} %)`;
+                    }
+                },
+                legend: {
+                    show: false
+                },
+                xaxis: {
+                    categories: labels,
+                    labels: {
+                        style: {
+                            colors: colors,
+                            fontSize: '12px'
+                        }
+                    }
+                },
+                yaxis: {
+                    decimalsInFloat: 0
+                }
+            };
+
+            const chart = new ApexCharts(document.querySelector("#chart"), options);
+            return chart;
+        }
+    </script>
+</body>
+</html>

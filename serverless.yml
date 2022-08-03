@@ -9,6 +9,8 @@ provider:
   # stage: dev
   region: ap-northeast-1
 
+  websocketsApiName: tweets-np-stream
+
   iam:
     role:
       statements:
@@ -27,11 +29,26 @@ provider:
             - "comprehend:*"
           Resource:
             - "*"
+        - Effect: "Allow"
+          Action:
+            - dynamodb:*
+          Resource:
+            - !GetAtt ConnectionTable.Arn
 
   environment:
     DATAFILE: "scsk_tweets.json"
-    WORKSTREAM_ARN: !GetAtt WorkStream.Arn
+    # WORKSTREAM_ARN: !GetAtt WorkStream.Arn
     WORKSTREAM_NAME: ${self:custom.streamName}
+    WEBSOCKET_ENDPOINT:
+      Fn::Join:
+        - ""
+        - - "wss://"
+          - !Ref WebsocketsApi
+          - ".execute-api."
+          - ${aws:region}
+          - ".amazonaws.com/"
+          - ${sls:stage}
+    CONNECTION_TABLE_NAME: !Ref ConnectionTable
 
 custom:
   # 重要!!! 一意の名前をつけてください !!!
@@ -39,13 +56,17 @@ custom:
   webSiteName: kinesis-sample-tweet-pn-${self:custom.suffix}
   webSiteOrigin:
     Fn::Join:
-    - ""
-    - - "http://"
-      - ${self:custom.webSiteName}-${sls:stage}
-      - ".s3-website-"
-      - ${aws:region}
-      - ".amazonaws.com"
+      - ""
+      - - "http://"
+        - ${self:custom.webSiteName}-${sls:stage}
+        - ".s3-website-"
+        - ${aws:region}
+        - ".amazonaws.com"
   streamName: workstream
+  webSiteBucketName: ${self:custom.webSiteName}-${sls:stage}
+  s3Sync:
+    - bucketName: ${self:custom.webSiteBucketName}
+      localDir: static
 
 package:
   patterns:
@@ -54,15 +75,27 @@ package:
 functions:
   producer:
     handler: producer.publish
+    timeout: 900
   subscriber:
     handler: subscriber.subscribe
+    timeout: 60
     events:
       - stream:
           type: kinesis
           arn: !GetAtt WorkStream.Arn
           batchSize: 20
-          maximumRetryAttempts: 10
+          maximumRetryAttempts: 3
           consumer: true
+  connect:
+    handler: subscriber.connect
+    events:
+      - websocket:
+          route: $connect
+  disconnect:
+    handler: subscriber.disconnect
+    events:
+      - websocket:
+          route: $disconnect
 
 #    Define function environment variables here
 #    environment:
@@ -76,13 +109,33 @@ resources:
       Type: AWS::Kinesis::Stream
       Properties: 
         Name: ${self:custom.streamName}
-        ShardCount: 20
+        StreamModeDetails:
+          StreamMode: ON_DEMAND
+
+    # Websocket コネクションID保存
+    ConnectionTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: connections
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        
 
     # ウェブサイト用バケット
     WebSiteBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:custom.webSiteName}-${sls:stage}
+        BucketName: ${self:custom.webSiteBucketName}
         AccessControl: PublicRead
         WebsiteConfiguration:
           IndexDocument: index.html
@@ -109,3 +162,6 @@ resources:
     StaticWebSiteUrl:
       Description: "静的ウェブサイトホスティングのURL"
       Value: ${self:custom.webSiteOrigin}
+
+plugins:
+  - serverless-s3-sync
