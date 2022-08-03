@@ -1,0 +1,53 @@
+article {
+    margin: 0;
+    padding: 1em;
+    margin-bottom: 0.3em;
+    position: relative;
+    font-size: 12px;
+}
+article p {
+    font-size: 12px;
+    margin: 0;
+}
+article:before {
+    font-size: 9px;
+    background-color: rgba(0,0,0,0.1);
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 2px;
+    width: 48px;
+    text-align: center;
+}
+
+.Positive {
+    background-color: rgba(46,147,250,0.3)
+}
+.Positive:before {
+    content: 'Positive';
+}
+
+.Negative {
+    background-color: rgba(233,30,99,0.3)
+}
+.Negative:before {
+    content: 'Negative';
+}
+
+.Neutral {
+    background-color: rgba(84,110,122,0.3);
+}
+.Neutral:before {
+    content: 'Neutral';
+}
+
+.Mixed {
+    background-color: rgba(102,218,38,0.3);
+}
+.Mixed:before {
+    content: 'Mixed';
+}
+
+#tweets {
+    max-height: 600px;
+}
