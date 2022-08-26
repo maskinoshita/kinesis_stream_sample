@@ -13,7 +13,7 @@ const sleep = (ms) => {
 }
 
 const publish = async (data) => {
-  const chunkSize = 200;
+  const chunkSize = 20;
   for (let i = 0; i<data.length; i+=chunkSize) {
     console.log(`published ${i}: ${Math.floor(Date.now()/1000)}`);
     const chunk = data.slice(i, i+chunkSize);

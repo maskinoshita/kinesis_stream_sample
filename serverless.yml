@@ -75,7 +75,7 @@ package:
 functions:
   producer:
     handler: producer.publish
-    timeout: 900
+    timeout: 240
   subscriber:
     handler: subscriber.subscribe
     timeout: 60
