@@ -27,6 +27,6 @@ Option:
     - `StaticWebSiteUrl`にブラウザでアクセスする
     - `sls inovke -f producer`でデータを投入する
 
-#　Clean
+# Clean
 
 * `sls remove`
