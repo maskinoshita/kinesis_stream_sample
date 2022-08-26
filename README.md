@@ -21,4 +21,12 @@
         - ツイートに関して、Comprehendを呼び出し、ポジネガ判定する
         - 判定結果を、WebSocketで接続されているクライアントに送信する
 
+Option:
+    - `serverless.yml`内の`DATAFILE`を`abe_tweets_10000.json`に変更する
+    - `sls deploy`を実行
+    - `StaticWebSiteUrl`にブラウザでアクセスする
+    - `sls inovke -f producer`でデータを投入する
+
 #　Clean
+
+* `sls remove`
